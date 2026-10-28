@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tesla Trip Brain — Live Demo (POC)</title>
+<meta name="description" content="Free Tesla trip-readiness planner. Interactive proof-of-concept demo of tesla-trip-brain: calendar trip + battery % + destination weather = required departure SoC and a charge/precondition plan.">
+<style>
+  :root { --bg:#0b0e13; --panel:#141922; --line:#232c3a; --text:#e8edf4; --muted:#93a1b5; --red:#e82127; --green:#37d67a; --amber:#f5b544; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:900px; margin:0 auto; padding:24px 16px 64px; }
+  header { text-align:center; padding:28px 0 8px; }
+  h1 { font-size:2rem; margin:0 0 8px; }
+  h1 .red { color:var(--red); }
+  .badge { display:inline-block; background:var(--amber); color:#111; font-weight:700; font-size:.8rem; padding:4px 10px; border-radius:999px; letter-spacing:.05em; }
+  p.sub { color:var(--muted); max-width:640px; margin:12px auto; line-height:1.5; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-top:20px; }
+  label { display:block; margin:14px 0 4px; color:var(--muted); font-size:.9rem; }
+  select, input[type=number] { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:#0b0e13; color:var(--text); font-size:1rem; }
+  input[type=range] { width:100%; }
+  .result { margin-top:20px; padding:16px; border-radius:10px; background:#0b0e13; border:1px solid var(--line); line-height:1.6; }
+  .result .verdict { font-size:1.25rem; font-weight:700; }
+  .ready { color:var(--green); } .charge { color:var(--amber); } .impossible { color:var(--red); }
+  .mono { font-family:ui-monospace,Menlo,monospace; font-size:.95rem; }
+  footer { color:var(--muted); font-size:.85rem; text-align:center; margin-top:28px; line-height:1.5; }
+  a { color:#7fb3ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>Tesla <span class="red">Trip Brain</span></h1>
+<span class="badge">DEMO DATA — no real car connected</span>
+<p class="sub">Tesla nav reacts en route. Trip Brain answers the night before: <b>am I ready for tomorrow's trip?</b> Pick a pretend trip, set your battery %, and see the same math the real app runs — drive energy + reserve + preconditioning.</p>
+</header>
+
+<div class="panel">
+<label for="trip">Trip</label>
+<select id="trip">
+  <option value="120|32|8:00 AM tomorrow">Ski weekend → Big Bear — 120 miles, 32°F at destination, departs 8:00 AM tomorrow</option>
+  <option value="90|78|10:00 AM Saturday">Desert visit → Palm Springs — 90 miles, 78°F, departs 10:00 AM Saturday</option>
+  <option value="270|70|9:00 AM Sunday">Vegas trip → Las Vegas — 270 miles, 70°F, departs 9:00 AM Sunday</option>
+</select>
+<label for="soc">Current battery: <span id="socLabel">62</span>%</label>
+<input type="range" id="soc" min="10" max="100" value="62">
+<label for="charger">Home charger power (kW)</label>
+<input type="number" id="charger" value="11.5" min="1" max="22" step="0.1">
+<div class="result" id="result"></div>
+</div>
+
+<div class="panel">
+<h2 style="margin-top:0">How the math works (the real app's rules)</h2>
+<p class="sub" style="margin:0">Base 280 Wh/mile, adjusted for destination weather: below 40°F +15% (below 20°F +25%), above 95°F +10%. Preconditioning: 2.0 kWh / 30 min on cold or hot days, else 0.5 kWh / 15 min. Reserve: 10% of a 75 kWh pack (7.5 kWh). Required departure SoC = (drive + preconditioning + reserve) ÷ 75 kWh.</p>
+<p class="sub" style="margin:12px 0 0">This page is static hosting only — it never talks to a car or Tesla's servers. The full app is free &amp; open source: <a href="https://github.com/rtmalikian/tesla-trip-brain">github.com/rtmalikian/tesla-trip-brain</a>.</p>
+</div>
+<footer>DEMO DATA: pretend trips, pretend battery. MIT — Raphael Malikian.</footer>
+</div>
+<script>
+function fmtTime(mins) {
+  let h = Math.floor(mins / 60) % 24, m = Math.round(mins % 60);
+  if (m === 60) { h = (h + 1) % 24; m = 0; }
+  const ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12;
+  return h12 + ":" + String(m).padStart(2, "0") + " " + ap;
+}
+function update() {
+  const [miles, temp, depLabel] = document.getElementById("trip").value.split("|");
+  const soc = +document.getElementById("soc").value;
+  const kw = +document.getElementById("charger").value || 11.5;
+  document.getElementById("socLabel").textContent = soc;
+  const dist = +miles, t = +temp;
+  let factor = 1.0; if (t < 20) factor = 1.25; else if (t < 40) factor = 1.15; else if (t > 95) factor = 1.10;
+  const wh = 280 * factor, drive = dist * wh / 1000;
+  const pre = (t < 40 || t > 95) ? 2.0 : 0.5, preMin = (t < 40 || t > 95) ? 30 : 15;
+  const reserve = 7.5, required = (drive + pre + reserve) / 75 * 100;
+  const depMatch = depLabel.match(/(\d+):(\d+) (AM|PM)/);
+  let depH = +depMatch[1] % 12 + (depMatch[3] === "PM" ? 12 : 0);
+  const depMin = depH * 60 + +depMatch[2];
+  let verdict, cls;
+  if (required > 100) {
+    verdict = "Beyond one charge — charge to 100% and plan a Supercharger stop en route.";
+    cls = "impossible";
+  } else if (soc >= required) {
+    verdict = "Ready — precondition " + preMin + " min before leaving.";
+    cls = "ready";
+  } else {
+    const shortfall = (required - soc) / 100 * 75, hours = shortfall / kw;
+    const by = fmtTime(depMin - hours * 60 - preMin);
+    verdict = "Not ready yet — start charging by about " + by + " (" + shortfall.toFixed(1) + " kWh short, about " + hours.toFixed(1) + " h), then precondition " + preMin + " min before leaving.";
+    cls = "charge";
+  }
+  document.getElementById("result").innerHTML =
+    '<div class="verdict ' + cls + '">' + verdict + '</div>' +
+    '<div class="mono" style="margin-top:10px">Departs ' + depLabel + ' · ' + dist + ' miles · ' + t + '°F at destination<br>' +
+    'Drive ' + drive.toFixed(1) + ' kWh at ' + wh.toFixed(0) + ' Wh/mile + precondition ' + pre.toFixed(1) + ' kWh + reserve ' + reserve.toFixed(1) + ' kWh<br>' +
+    'You need ' + required.toFixed(0) + '% to leave; you have ' + soc + '%.</div>';
+}
+document.getElementById("trip").addEventListener("change", update);
+document.getElementById("soc").addEventListener("input", update);
+document.getElementById("charger").addEventListener("input", update);
+update();
+</script>
+</body>
+</html>

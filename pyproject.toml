@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tesla-trip-brain"
+version = "0.1.0"
+description = "Free Tesla trip-readiness planner: calendar trips + live battery % + destination weather = required departure SoC and a charge/precondition plan, with an OpenAI-compatible planning API — pluggable LLM backend and full offline rules engine"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Raphael Malikian", email = "rtmalikian@gmail.com" }]
+keywords = ["tesla", "fleet-api", "openai-compatible", "llm", "ai", "chat", "ollama", "trip-planning", "road-trip", "charging", "battery", "ev", "model-3", "model-y"]
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Home Automation",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+ttrip = "tesla_trip_brain.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/rtmalikian/tesla-trip-brain"
+Issues = "https://github.com/rtmalikian/tesla-trip-brain/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
